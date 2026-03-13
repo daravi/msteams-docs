@@ -77,6 +77,46 @@ The `SetAuthentication` method configures the SDK's `DefaultAuthenticationProvid
 > [!NOTE]
 > `MsalTokenProvider` supports app secret, certificate, Subject Name/Issuer (SNI), and managed identity — whatever the `ConfidentialClientApplicationBuilder` was configured with. For custom token acquisition (e.g., SEAL, Azure.Identity), implement the `ITokenProvider` interface directly.
 
+### Migrating from SetAuthenticationProvider (deprecated)
+
+If your bot currently uses `SetAuthenticationProvider` with a custom `AuthenticationProvider` class, migrate to `SetAuthentication` for automatic Entra token support:
+
+```csharp
+// Before (deprecated — generates compile warning):
+var authProvider = new AuthenticationProvider(appName, appId, appSecret, logger);
+builder.SetAuthenticationProvider(authProvider);
+
+// After (recommended):
+var msalApp = ConfidentialClientApplicationBuilder.Create(appId)
+    .WithClientSecret(appSecret) // Or .WithCertificate(cert) for certificate-based auth
+    .Build();
+builder.SetAuthentication(appId, new MsalTokenProvider(msalApp));
+```
+
+**What changes:**
+
+| Aspect | Old (`SetAuthenticationProvider`) | New (`SetAuthentication`) |
+|---|---|---|
+| Inbound validation | Custom code fetching OpenID keys | Automatic — validates both legacy and Entra tokens |
+| Outbound auth | Custom MSAL token acquisition | `MsalTokenProvider` wraps your existing MSAL app |
+| Token migration | Manual — you must update validation code | Automatic — SDK handles both token types |
+| Code required | ~100 lines custom `AuthenticationProvider` | 3 lines (create MSAL app + call `SetAuthentication`) |
+
+For custom token acquisition beyond MSAL (e.g., SEAL, Azure.Identity, managed identity), implement `ITokenProvider`:
+
+```csharp
+public class MyTokenProvider : ITokenProvider
+{
+    public async Task<string> AcquireTokenAsync(string tenant)
+    {
+        // Your custom token acquisition logic
+        return accessToken;
+    }
+}
+
+builder.SetAuthentication(appId, new MyTokenProvider());
+```
+
 ### Understanding the token format
 
 The following sample shows the HTTP POST message sent to your webhook:
