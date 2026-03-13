@@ -119,6 +119,9 @@ builder.SetAuthentication(appId, new MyTokenProvider());
 
 ### Understanding the token format
 
+> [!IMPORTANT]
+> The token format shown below is the **legacy OpenID token** issued by `https://api.botframework.com`. This token format is being deprecated in favor of standard **Microsoft Entra tokens**. If you use `DefaultAuthenticationProvider` (recommended), both token formats are validated automatically and no code changes are required. If you implement custom token validation, ensure your code accepts tokens from both `https://api.botframework.com` and Microsoft Entra issuers (`https://login.microsoftonline.com/{tid}/v2.0`).
+
 The following sample shows the HTTP POST message sent to your webhook:
 
 ```http
@@ -156,9 +159,6 @@ Each OAuth token value is used as follows:
 * `aud` where audience is the App ID URI specified for the application.
 * `tid` is the tenant id for Contoso.com.
 * `iss` is the token issuer, `https://api.botframework.com`.
-
-> [!IMPORTANT]
-> The token issuer and signing mechanism are being migrated from custom OpenID tokens to standard Microsoft Entra tokens. If you use `DefaultAuthenticationProvider` (recommended), this migration is handled automatically. If you implement custom token validation, ensure your code accepts tokens from both `https://api.botframework.com` and Microsoft Entra issuers (`https://login.microsoftonline.com/{tid}/v2.0`).
 
 ### Custom token validation (advanced)
 
