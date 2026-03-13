@@ -43,7 +43,43 @@ Your bot must inspect the token posted to your webhook to validate the request. 
 
 Your application must validate this token before accepting the callback request.
 
-The following sample code is used to authenticate the callback:
+### Recommended: Use the SDK's built-in authentication provider
+
+The Graph Communications SDK includes `DefaultAuthenticationProvider`, which handles token validation automatically. This is the recommended approach — it validates both legacy tokens and Microsoft Entra tokens, so your bot works seamlessly during the ongoing migration to Entra-based authentication.
+
+To set up authentication when building your communications client:
+
+```csharp
+using Microsoft.Graph.Communications.Client;
+using Microsoft.Graph.Communications.Client.Authentication;
+using Microsoft.Identity.Client;
+
+// Create an MSAL confidential client for outbound Graph API calls
+var msalApp = ConfidentialClientApplicationBuilder.Create(appId)
+    .WithClientSecret(appSecret) // Or .WithCertificate(cert) for certificate-based auth
+    .Build();
+
+// Set up the client with built-in authentication
+var builder = new CommunicationsClientBuilder(appName, appId);
+builder.SetAuthentication(appId, new MsalTokenProvider(msalApp));
+builder.SetNotificationUrl(callbackUrl);
+builder.SetServiceBaseUrl(serviceUrl);
+
+var client = builder.Build();
+```
+
+The `SetAuthentication` method configures the SDK's `DefaultAuthenticationProvider`, which:
+
+* Validates inbound notification tokens (both legacy OID and Microsoft Entra tokens)
+* Uses the provided `ITokenProvider` (via `MsalTokenProvider`) for outbound Graph API requests
+* Handles OpenID configuration caching and key refresh automatically
+
+> [!NOTE]
+> `MsalTokenProvider` supports app secret, certificate, Subject Name/Issuer (SNI), and managed identity — whatever the `ConfidentialClientApplicationBuilder` was configured with. For custom token acquisition (e.g., SEAL, Azure.Identity), implement the `ITokenProvider` interface directly.
+
+### Understanding the token format
+
+The following sample shows the HTTP POST message sent to your webhook:
 
 ```http
 POST https://bot.contoso.com/api/calls
@@ -62,7 +98,7 @@ Authentication: Bearer <TOKEN>
 ]
 ```
 
-The OAuth token has the following values, and is signed by Skype:
+The OAuth token has the following values:
 
 ```json
 {
@@ -75,15 +111,22 @@ The OAuth token has the following values, and is signed by Skype:
 }
 ```
 
-The OpenID configuration published at <https://api.aps.skype.com/v1/.well-known/OpenIdConfiguration> can be used to verify the token. Each OAuth token value is used as follows:
+Each OAuth token value is used as follows:
 
 * `aud` where audience is the App ID URI specified for the application.
 * `tid` is the tenant id for Contoso.com.
 * `iss` is the token issuer, `https://api.botframework.com`.
 
-For your code handling, the webhook must validate the token, ensure it hasn't expired, and check whether it has been signed by the published OpenID configuration. You must also check whether aud matches your App ID before accepting the callback request.
+> [!IMPORTANT]
+> The token issuer and signing mechanism are being migrated from custom OpenID tokens to standard Microsoft Entra tokens. If you use `DefaultAuthenticationProvider` (recommended), this migration is handled automatically. If you implement custom token validation, ensure your code accepts tokens from both `https://api.botframework.com` and Microsoft Entra issuers (`https://login.microsoftonline.com/{tid}/v2.0`).
 
-For more information, see [validate inbound requests](https://github.com/microsoftgraph/microsoft-graph-comms-samples/blob/master/Samples/Common/Sample.Common/Authentication/AuthenticationProvider.cs).
+### Custom token validation (advanced)
+
+If you need to implement custom token validation instead of using `DefaultAuthenticationProvider`, your webhook must validate the token, ensure it hasn't expired, and check whether it has been signed by the published OpenID configuration. You must also check whether `aud` matches your App ID before accepting the callback request.
+
+The OpenID configuration is published at <https://api.aps.skype.com/v1/.well-known/OpenIdConfiguration>.
+
+For more information, see the [EchoBot sample](https://github.com/microsoftgraph/microsoft-graph-comms-samples/blob/master/Samples/PublicSamples/EchoBot/src/EchoBot/Bot/BotService.cs).
 
 ## Next step
 
